@@ -1,0 +1,2 @@
+const {test}=require('node:test');const a=require('node:assert/strict');
+test('handler returns forbidden wrong account and does not expose provider secrets',async()=>{global.Twilio={Response:class{setStatusCode(x){this.status=x}appendHeader(){}setBody(x){this.body=x}}};const {handler}=require('../src/handler.cjs');const r=await new Promise(resolve=>handler({ACCOUNT_SID:'ACtest',AUTH_TOKEN:'secret'},{AccountSid:'ACwrong',mode:'sms'},(_,r)=>resolve(r)));a.equal(r.status,403);a.doesNotMatch(JSON.stringify(r),/secret/);});

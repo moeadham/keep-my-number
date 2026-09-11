@@ -1,0 +1,9 @@
+# Limits and retention
+
+Twilio Functions have a **10-second execution limit per invocation**, not a ten-second call limit. This app uses an 8.5-second I/O budget, caps cold synchronous AllModels synthesis at 5 seconds and audio at 1 MiB, and performs media attachment in a subsequent signed Twilio callback. It does not use an asynchronous speech API or start work after the Function callback. Up to three generation attempts are allowed; slow synthesis can fail unavailable. Cold preparation delays outbound ringing; announcement and ringing overlap after preparation.
+
+Audio is stored with MCS and attached to Messages in a dedicated participant-free Conversation. Never add participants or use an existing messaging service for storage. Temporary media URLs expire; authenticated callbacks retrieve fresh URLs. Sync stores only metadata: seven-day speech/SMS records and one-day call decisions. **Sync TTL does not delete attached media.** No automatic cleanup is implemented: operators must implement and verify deletion of retained Messages/media according to their retention policy before sustained use. Retained audio contains spoken phone numbers; protect account credentials and avoid sharing temporary URLs.
+
+Functions, Sync, Conversations/media storage, both call legs/conferences, speech, and email may be billed separately. SMS deduplication is bounded by its seven-day TTL. An ambiguous email submission fails visibly and will not automatically resend: inspect provider status before manual reconciliation. Queued is not proof of mailbox receipt. MMS attachments are not forwarded.
+
+The generalized distribution is tested offline, not deployed by its tests. Unit tests use mocks; they do not establish provider latency, mailbox delivery, voice permission, pronunciation, or telephone quality.

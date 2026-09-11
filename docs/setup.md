@@ -1,46 +1,44 @@
-# Deployment setup
+# Setup
 
-## 1. Accounts and configuration
+Requires Node.js 22, Python 3, ffmpeg, a Twilio account with Functions, Sync and Conversations enabled, an AllModels API key, and Cloudflare Email Sending enabled for your verified sender domain. Porting eligibility and regulatory requirements depend on the number/country; arrange porting with Twilio separately.
 
-Check [Twilio porting eligibility](https://www.twilio.com/en-us/phone-numbers/porting). Keep your existing service active until the port completes. Enable the destination country's outbound Voice geographic permissions; trial accounts may require verified destinations. Use a voice-capable Twilio number you own for OUTBOUND_FROM, and only your inbound Twilio numbers in ALLOWED_NUMBERS. FORWARD_TO must not route back to this app.
-
-Use a Cloudflare account with Workers Paid/Durable Objects and [Email Sending](https://developers.cloudflare.com/email-service/) enabled. Verify your sending domain and destination as required by your account. The EMAIL binding restrictions must match EMAIL_FROM and EMAIL_TO. This app uses the structured Email Sending API, not a third-party mail vendor.
-
-`wrangler.example.json` contains fictional NANP 555-0100/0101 numbers, example.com mailboxes, a zero-filled test SID and no account/resource bindings. Set your own values in ignored `wrangler.json`. Set PUBLIC_ORIGIN to your final HTTPS workers.dev/custom-domain URL, without a trailing slash. You may add your Cloudflare account_id there for multi-account use. Set TTS_VOICE explicitly to a voice you are licensed/authorized to use; TTS_MODEL defaults to fish/s2-1-pro. The pronunciation format uses Fish `[break]` markers; changing provider/model requires testing.
-
-## 2. Secrets, audio and Worker
-
-Authenticate Wrangler to your own account. These commands change that account and incur costs; dry-run/test commands do not deploy.
+## Offline check (no provider calls or billing)
 
 ```sh
-npx wrangler login
-# Set ALLMODELS_API_KEY in your shell without saving it to this repository.
-npm run audio
-npm run deploy
-npx wrangler secret put TWILIO_AUTH_TOKEN --config wrangler.json
-npx wrangler secret put AUDIO_SECRET --config wrangler.json
-npx wrangler secret put ALLMODELS_API_KEY --config wrangler.json
+npm ci
+npm test
+python3 scripts/deploy.py
 ```
 
-Enter your Twilio account auth token, a fresh random AUDIO_SECRET (at least 32 random bytes), and AllModels API key at the prompts. Do not route any numbers until all secrets are installed. The audio command makes one billed speech request, decodes the result with FFmpeg, and creates ignored src/audio.json containing only the unavailable prompt. Rerun audio and redeploy when changing its voice/model. npm ci creates an empty audio file if absent so a clean checkout can test/build; real deployment refuses empty audio.
+The plan really bundles the handler into `dist/entry.cjs`. It requires no credentials and performs no remote provisioning or synthesis.
 
-## 3. Twilio Function and Studio
+## Configure
 
-Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in your shell, matching the Worker account. Optionally set TWILIO_SERVICE_NAME to a unique service name (default phone-forwarder).
+Copy `config.example.json` to `.private.json` and replace all examples. The UK numbers are fictional examples. `ALLOWED_NUMBERS` is a comma-separated E.164 allowlist; `DESTINATION` is your receiving phone; `OUTBOUND_NUMBER` must be owned by or verified with Twilio. Use a real Cloudflare account ID and verified `EMAIL_FROM`; `EMAIL_TO` receives the original sender, receiving number, and complete SMS body. Subject: `SMS From: [From] To: [To]`.
+
+Choose a `TTS_MODEL` and **voice ID you have permission to use** from the AllModels catalog. No voice is bundled or preselected. Keep `LIVE_CALLS_ENABLED` as the string `false`; `UNAVAILABLE_PATH` stays `/unavailable.mp3`.
+
+Set these environment variables through your secret manager (never commit them):
+
+- `TWILIO_OUTBOUND_ACCOUNT_SID` and `TWILIO_OUTBOUND_AUTH_TOKEN`: the target Twilio account, used for API provisioning. Functions receive `ACCOUNT_SID`/`AUTH_TOKEN` from Twilio's IncludeCredentials setting.
+- `ALLMODELS_API_KEY`: speech access.
+- `CF_EMAIL_API_TOKEN`: Cloudflare **Account → Email Sending → Edit**, scoped to your sending account. Email Routing/DNS permissions alone are insufficient. Required on every deploy; a missing token fails before writes rather than removing or silently replacing the existing token.
 
 ```sh
-npm run twilio:plan       # local flow generation; no credentials/network needed
-npm run twilio:deploy     # creates/updates isolated Function and published Studio flow
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+# Explicitly billable; creates only the unavailable prompt:
+.venv/bin/python scripts/generate-audio.py --execute
+# Explicit provisioning; never routes a number or places a call:
+.venv/bin/python scripts/deploy.py --execute
 ```
 
-The protected Function signs requests to the Worker using the same Twilio auth token. Provisioning IDs and generated Studio JSON are stored only in ignored .state/. Keep that directory private and retain it for subsequent updates; deleting it causes the script to attempt a new service. The script verifies the active Functions build and Studio definition. It never changes phone-number routes.
+Alternatively supply your own permitted MP3 at `audio/unavailable.mp3` with the unavailable message. Deployment validates its size and fully decodes it with ffmpeg before any provider write. Config/state/audio/build/evidence are ignored. Keep `.state.json` private and backed up: it identifies resources for redeployment. Never reuse another project's state or delete state to work around an interrupted build; inspect the recorded build first. Provisioning is not transactional; partial failures may leave billable resources.
 
-In Twilio's number configuration, explicitly select the generated Studio flow for incoming calls and incoming messages only when ready. Save the old routes first for rollback. Verify receipt with an SMS and an authorized call; provider acceptance is not proof of delivery. Deployment and live calling have not been tested against your account by this repository's offline test suite.
+The script provisions a dedicated Serverless Service/environment, protected `/entry` Function and `/unavailable.mp3` Asset, Sync Service, and participant-free Conversations Service/Conversation through Twilio REST, then uploads/builds/deploys and reads back the active build and variables. It does not buy numbers, create contact participants, synthesize speech implicitly, or modify existing routes. It refuses live-enabled configuration and state from another account. Redeploying intentionally disables calls; do not deploy to an active routing target without a maintenance plan.
 
-## Behavior and privacy
+## Activate separately, after testing
 
-Calls ring for 25 seconds. After the private prompt, you have 10 seconds to press 1. Speech failure fails closed. SMS text/Unicode and sender/recipient are preserved in email; MMS media is not included. SMS deduplication favors avoiding duplicate email: uncertain sends are not retried automatically.
+Back up the exact incoming-number voice/SMS/application/fallback/status settings first. In the new Functions environment, enable `LIVE_CALLS_ENABLED=true` only when ready for explicitly authorized telephone testing. Set the selected Twilio number's voice webhook to `https://<environment-domain>/entry?mode=voice`, POST, and SMS webhook to `https://<environment-domain>/entry?mode=sms`, POST. Remove conflicting application/fallback routes only after reviewing them. Do not set a number-level status callback to this handler: child/conference callbacks are generated internally with their parent context. Read back number settings and test acceptance, decline, no answer and email receipt; restore the saved settings if testing fails. These activation steps are deliberately not automated.
 
-Dynamic speech uses complete sentences, international libphonenumber grouping and spelled digits. The private cache keys include model, voice and text, expires audio after seven days, and caps synthesis at 100 attempts/day with four concurrent requests. Signed audio URLs last two minutes. Cache and call/SMS state contain personal information; restrict account access and define your own retention/deletion policy. Call/SMS state is not automatically purged by this implementation. Email and telephony providers also retain data under their policies. Observability is disabled by default; enabling logging may expose metadata.
-
-Never publish .state/, wrangler.json, .dev.vars, generated src/audio.json, recordings, provider logs or credentials. No voice recordings or cloned-voice rights are supplied.
+Never make the Function public: protected visibility verifies Twilio signatures; the handler additionally checks account, numbers and call context. All tests are offline; none originate calls, send email or bill audio. See [limits](limits.md) before production use.

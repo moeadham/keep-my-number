@@ -1,5 +1,3 @@
-# Third-party notices
+# Dependencies
 
-Runtime number parsing uses libphonenumber-js (MIT), installed from npm; its upstream license remains in the dependency distribution. Development/build dependencies retain their own licenses in node_modules. No vendored third-party source or generated audio is distributed. Bundled build artifacts can contain third-party code and license notices and must not have those notices stripped.
-
-Keep My Number is licensed under the MIT License; see LICENSE.
+This project is MIT licensed. Runtime dependencies: libphonenumber-js (MIT), Twilio Node SDK (MIT). Build tooling: esbuild (MIT). Deployment tooling: Requests (Apache-2.0). Their licenses remain applicable. Provider services and voice models have separate terms; use only a voice you have permission to use.

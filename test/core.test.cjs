@@ -1,0 +1,2 @@
+const {test}=require('node:test');const a=require('node:assert/strict');
+test('whole utterance preserves grouped E164 digits, rejects malformed source',()=>{const c=require('../src/core.cjs');a.equal(c.spokenNumber('+442079460123'),'plus four four [break] two zero [break] seven nine four six [break] zero one two three');a.equal(c.spokenNumber('+4402079460123'),'unknown number');a.match(c.promptText('incoming','+442079460123','+442079460124'),/^Incoming call from plus/);});
