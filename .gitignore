@@ -1,0 +1,17 @@
+node_modules/
+.wrangler/
+dist/
+.env
+.env.*
+!.env.example
+.dev.vars*
+.local*
+wrangler.json
+audio/
+.state/
+__pycache__/
+*.pyc
+*.mp3
+*.wav
+*.mp4
+src/audio.json
