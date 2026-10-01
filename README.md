@@ -6,4 +6,4 @@ Calls ring your phone while the caller hears a connecting announcement. You hear
 
 Runs on **Twilio Functions + Sync + Conversations/MCS**. Uses AllModels for speech and Cloudflare Email Sending REST for email. No Cloudflare Workers or Durable Objects.
 
-[Setup](docs/setup.md) · [Limits and retention](docs/limits.md) · [MIT license](LICENSE)
+[Port your number to Twilio](https://twlo.my.salesforce-sites.com/InternationalPorting) · [Setup](docs/setup.md) · [Limits and retention](docs/limits.md) · [MIT license](LICENSE)
